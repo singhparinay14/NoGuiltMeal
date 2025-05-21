@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Logs, system files
+*.log
+*.DS_Store
+
+# Output files
+*.csv
+*.png
+*.jpg
+product_images/
