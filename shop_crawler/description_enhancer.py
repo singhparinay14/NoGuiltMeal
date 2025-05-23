@@ -24,7 +24,7 @@ def enhance_with_gpt(system_prompt: str, user_prompt: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"⚠️ GPT error: {e}")
+        print(f"GPT error: {e}")
         return ""
 
 # Load data
@@ -36,6 +36,7 @@ SYSTEM_PROMPT = "You are a helpful assistant for rewriting e-commerce product de
 
 for idx, row in tqdm(df.iterrows(), total=len(df)):
     name = row.get("Title", "").strip()
+    nutrition_facts = row.get("Nutritional Facts", "").strip()
     short_desc = row.get("Short Description", "").strip()
     long_desc = row.get("Long Description", "").strip()
 
@@ -64,11 +65,12 @@ for idx, row in tqdm(df.iterrows(), total=len(df)):
             "Ensure the tone is informative, neutral, and compliant with Google Merchant Center guidelines "
             "(no clickbait, no exaggerated claims).\n"
             "At the end of the description, include a clear and accurate tabela wartości odżywczych (nutrition table) "
-            "formatted in basic HTML.\n"
+            "formatted in basic HTML with the following nutrition facts about this product: \n"
+            f"\"{nutrition_facts}\"\n"
             "Output the entire result in simple HTML suitable for a WordPress product page."
         )
         df.at[idx, "Enhanced Long Description"] = enhance_with_gpt(SYSTEM_PROMPT, user_prompt)
 
 # Save
-df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8")
+df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
 print(f"✅ Enhanced descriptions written to {OUTPUT_CSV}")
