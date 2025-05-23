@@ -8,6 +8,7 @@ venv/
 # Logs, system files
 *.log
 *.DS_Store
+.env
 
 # Output files
 *.csv
