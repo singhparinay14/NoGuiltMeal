@@ -3,14 +3,23 @@ import pandas as pd
 from openai import OpenAI
 from tqdm import tqdm
 from dotenv import load_dotenv
+import re
 
-# Load .env and initialize client
+# ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ✅ File paths
 INPUT_CSV = "products.csv"
 OUTPUT_CSV = "products_enhanced.csv"
 
+# ✅ Function to clean GPT output
+def clean_gpt_output(text: str) -> str:
+    """Remove markdown-style ```html fenced blocks if present."""
+    cleaned = re.sub(r"^```html\s*|```$", "", text.strip(), flags=re.IGNORECASE | re.MULTILINE)
+    return cleaned.strip()
+
+# ✅ Wrapper to call GPT and clean response
 def enhance_with_gpt(system_prompt: str, user_prompt: str) -> str:
     try:
         response = client.chat.completions.create(
@@ -22,24 +31,28 @@ def enhance_with_gpt(system_prompt: str, user_prompt: str) -> str:
             temperature=0.7,
             max_tokens=2000
         )
-        return response.choices[0].message.content.strip()
+        raw = response.choices[0].message.content
+        return clean_gpt_output(raw)
     except Exception as e:
-        print(f"GPT error: {e}")
+        print(f"⚠️ GPT error: {e}")
         return ""
 
-# Load data
+# ✅ Load product data
 df = pd.read_csv(INPUT_CSV)
 df["Enhanced Short Description"] = ""
 df["Enhanced Long Description"] = ""
 
+# ✅ Base prompt for consistent tone
 SYSTEM_PROMPT = "You are a helpful assistant for rewriting e-commerce product descriptions in Polish."
 
+# ✅ Iterate over each row
 for idx, row in tqdm(df.iterrows(), total=len(df)):
     name = row.get("Title", "").strip()
-    nutrition_facts = row.get("Nutritional Facts", "").strip()
+    nutrition_facts = row.get("Nutrition Facts", "").strip()
     short_desc = row.get("Short Description", "").strip()
     long_desc = row.get("Long Description", "").strip()
 
+    # ✅ Enhance Short Description
     if short_desc:
         user_prompt = (
             f"Write a short product description in Polish for the product: {name}.\n"
@@ -54,6 +67,7 @@ for idx, row in tqdm(df.iterrows(), total=len(df)):
         )
         df.at[idx, "Enhanced Short Description"] = enhance_with_gpt(SYSTEM_PROMPT, user_prompt)
 
+    # ✅ Enhance Long Description
     if long_desc:
         user_prompt = (
             f"Write a 750-word long product description in Polish for the product: {name}.\n"
@@ -71,6 +85,6 @@ for idx, row in tqdm(df.iterrows(), total=len(df)):
         )
         df.at[idx, "Enhanced Long Description"] = enhance_with_gpt(SYSTEM_PROMPT, user_prompt)
 
-# Save
+# ✅ Save enhanced CSV with UTF-8 BOM for WooCommerce compatibility
 df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
 print(f"✅ Enhanced descriptions written to {OUTPUT_CSV}")

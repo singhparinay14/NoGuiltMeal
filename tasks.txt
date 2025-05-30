@@ -1,0 +1,6 @@
+fix the current scraped content and update the code to extract the product logo as well, and try to also extract the dietary information if possible. Then while importing into the staging website, match the attributes to the columns.
+
+koka will send a list of products to scrape from the website StrefaSupli.pl, create a scraper for that.
+
+check the issues with the website and try to fix them.
+
