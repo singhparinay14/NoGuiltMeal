@@ -1,3 +1,5 @@
+# Scraper for GuiltFree.pl across multiple categories with GTIN extraction and category tagging
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -8,6 +10,39 @@ import csv
 import time
 import random
 import re
+import json
+
+# === CATEGORY CONFIGURATION ===
+CATEGORY_URLS = [
+    "https://guiltfree.pl/gb/354-high-protein-products",  # Protein Snacks
+    "https://guiltfree.pl/gb/355-protein-supplements?manufacturers=biotech-usa,olimp,optimum-nutrition",  # Proteins
+    "https://guiltfree.pl/gb/639-sport-suplements",  # Supplements
+    "https://guiltfree.pl/gb/393-healthy-sweets?categories=chocolate-without-sugar,chocolates-and-bonbons-without-sugar,cookies-without-sugar,wafers-without-sugar-and-light",  # snacks
+    "https://guiltfree.pl/gb/389-peanut-butters",  # Spreads
+    "https://guiltfree.pl/gb/344-energy-drinks-without-sugar",  # Energy Drinks
+    "https://guiltfree.pl/gb/349-plant-based-drinks",  # Shakes and Drinks
+    "https://guiltfree.pl/gb/332-light-bread",  # Breads
+    "https://guiltfree.pl/gb/366-salty-light-snacks?categories=protein-chips,veggie-crisps",  # Chips
+    "https://guiltfree.pl/gb/380-ketchup-and-dressing?categories=dressings-zero-kcal,ketchup-without-sugar,light-mayonnaise,sauces-bbq-zero-kcal,zero-kcal-dips",  # Sauces and Dips
+    "https://guiltfree.pl/gb/437-spices-without-salt",  # Herbs and Spices
+]
+
+# Mapping from URL to a human-readable category name
+CATEGORY_NAMES = {
+    "https://guiltfree.pl/gb/354-high-protein-products": "Protein Snacks",
+    "https://guiltfree.pl/gb/355-protein-supplements?manufacturers=biotech-usa,olimp,optimum-nutrition": "Proteins",
+    "https://guiltfree.pl/gb/639-sport-suplements": "Supplements",
+    "https://guiltfree.pl/gb/393-healthy-sweets?categories=chocolate-without-sugar,chocolates-and-bonbons-without-sugar,cookies-without-sugar,wafers-without-sugar-and-light": "Snacks",
+    "https://guiltfree.pl/gb/389-peanut-butters": "Spreads",
+    "https://guiltfree.pl/gb/344-energy-drinks-without-sugar": "Energy Drinks",
+    "https://guiltfree.pl/gb/349-plant-based-drinks": "Shakes and Drinks",
+    "https://guiltfree.pl/gb/332-light-bread": "Breads",
+    "https://guiltfree.pl/gb/366-salty-light-snacks?categories=protein-chips,veggie-crisps": "Chips",
+    "https://guiltfree.pl/gb/380-ketchup-and-dressing?categories=dressings-zero-kcal,ketchup-without-sugar,light-mayonnaise,sauces-bbq-zero-kcal,zero-kcal-dips": "Sauces and Dips",
+    "https://guiltfree.pl/gb/437-spices-without-salt": "Herbs and Spices",
+}
+
+# === HELPER FUNCTIONS ===
 
 def random_sleep(min_s=2, max_s=5):
     time.sleep(random.uniform(min_s, max_s))
@@ -17,123 +52,141 @@ def extract_dieta_attribute(desc_text):
     dieta_map = {
         "no added sugar": "Bez dodatku cukru",
         "sugar free": "Bez cukru",
-        "sugar-free": "Bez cukru",
-        "no sugar": "Bez cukru",
         "gluten free": "Bez glutenu",
-        "gluten-free": "Bez glutenu",
         "lactose free": "Bez laktozy",
-        "lactose-free": "Bez laktozy",
         "keto": "Keto",
         "low carb": "Niskowęglowodanowa",
-        "low-carb": "Niskowęglowodanowa",
         "vegan": "Wegańska",
         "high protein": "Wysokoproteinowa",
-        "high-protein": "Wysokoproteinowa",
-        "plant-based": "Wegańska",
         "plant based": "Wegańska",
     }
-
-    dieta_terms = set()
-    for keyword, polish in dieta_map.items():
-        if keyword in desc_text:
-            dieta_terms.add(polish)
-
-    return ", ".join(sorted(dieta_terms))
+    terms = {pl for en, pl in dieta_map.items() if en in desc_text}
+    return ", ".join(sorted(terms))
 
 def extract_kalorii_attribute(nutrition_text):
-    # Match pattern: Calories: 164.85 (portion), 471.00 (100g)
-    match = re.search(r'Calories:\s*[\d.,]+\s*\(portion\),\s*([\d.,]+)\s*\(100g\)', nutrition_text)
-    if match:
-        cal_str = match.group(1).replace(',', '.').strip()  # Normalize comma decimals
-        try:
-            calories = float(cal_str)
-            if calories < 300:
-                return "Poniżej 300 kalorii"
-            elif 300 <= calories <= 500:
-                return "301 -500 kalorii"
-            elif 501 <= calories <= 1000:
-                return "501 -1000 kalorii"
-            else:
-                return "Ponad 1000 kalorii"
-        except ValueError:
-            return ""
-    return ""
+    match = re.search(r'Calories:\s*[\d\.,]+\s*\(portion\),\s*([\d\.,]+)\s*\(100g\)', nutrition_text)
+    if not match:
+        return ""
+    cal_str = match.group(1).replace(",", ".")
+    try:
+        cal = float(cal_str)
+    except ValueError:
+        return ""
+    if cal < 300:
+        return "Poniżej 300 kalorii"
+    if cal <= 500:
+        return "301 -500 kalorii"
+    if cal <= 1000:
+        return "501 -1000 kalorii"
+    return "Ponad 1000 kalorii"
 
 def fetch_product_data(driver):
+
+    # Skip product if title or page body is empty (broken or blank page)
     try:
-        title = driver.find_element(By.CSS_SELECTOR, "h1[itemprop='name']").text
+        body_text = driver.find_element(By.TAG_NAME, "body").text.strip()
+        if not body_text or "Product not found" in body_text or "Page not available" in body_text:
+            print("⚠️ Empty or broken product page — skipping")
+            return None
+    except:
+        print("⚠️ Could not load product page — skipping")
+        return None
+
+    # — Title —
+    try:
+        title = driver.find_element(By.CSS_SELECTOR, "h1[itemprop='name']").text.strip()
     except:
         title = ""
 
+    # — Images —
     image_urls = []
     try:
-        container = driver.find_element(By.CSS_SELECTOR, ".images-container")
-        image_elements = container.find_elements(By.CSS_SELECTOR, "img.thumb.js-thumb")
-        for img in image_elements:
+        imgs = driver.find_elements(By.CSS_SELECTOR, ".images-container img.thumb.js-thumb")
+        for img in imgs:
             src = img.get_attribute("data-image-large-src") or img.get_attribute("src")
-            if src and src.strip() not in image_urls:
+            if src and src not in image_urls:
                 image_urls.append(src.strip())
     except:
-        print("⚠️ Could not extract product images.")
+        pass
 
+    # — Price —
     try:
-        price = driver.find_element(By.CSS_SELECTOR, "span[itemprop='price']").text
+        price = driver.find_element(By.CSS_SELECTOR, "span[itemprop='price']").text.strip()
     except:
         price = ""
 
+    # — Brand (Marki) —
     try:
         brand = driver.find_element(By.CSS_SELECTOR, ".product-manufacturer span a").text.strip()
     except:
         brand = ""
 
+    # — Descriptions —
     try:
         short_desc = driver.find_element(By.CSS_SELECTOR, "div[itemprop='description']").get_attribute("innerText").strip()
     except:
         short_desc = ""
-
     try:
         long_desc = driver.find_element(By.ID, "description").get_attribute("innerText").strip()
     except:
         long_desc = ""
 
+    # — Nutrition Facts —
     try:
-        nutrition_tab = driver.find_element(By.XPATH, "//li[contains(., 'Nutritional values')]")
-        nutrition_tab.click()
+        driver.find_element(By.XPATH, "//li[contains(., 'Nutritional values')]").click()
         time.sleep(1.5)
     except:
-        print("⚠️ Nutritional tab not found.")
+        pass
 
     nutrition_facts = []
     try:
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "nutri_main_div"))
-        )
-
+        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "nutri_main_div")))
         rows = driver.find_elements(By.CSS_SELECTOR, ".nutri_main_div .row")
         for row in rows:
             try:
                 label = row.find_element(By.CSS_SELECTOR, ".col-8_jp").text.strip()
-                values = row.find_elements(By.CSS_SELECTOR, ".col-2_jp")
-                per_portion = values[0].text.strip() if len(values) > 0 else ""
-                per_100g = values[1].text.strip() if len(values) > 1 else ""
-                nutrition_facts.append(f"{label}: {per_portion} (portion), {per_100g} (100g)")
+                vals = row.find_elements(By.CSS_SELECTOR, ".col-2_jp")
+                p1 = vals[0].text.strip() if len(vals) > 0 else ""
+                p2 = vals[1].text.strip() if len(vals) > 1 else ""
+                nutrition_facts.append(f"{label}: {p1} (portion), {p2} (100g)")
             except:
                 continue
-    except Exception as e:
-        print(f"⚠️ Failed to extract nutritional facts div: {e}")
+    except:
+        pass
 
     nutrition_flat = "; ".join(nutrition_facts)
 
+    # — Nutrition-label image —
     try:
-        label_img = driver.find_element(By.CSS_SELECTOR, ".product-attachments img").get_attribute("src")
+        label_img = driver.find_element(By.CSS_SELECTOR, ".product-attachments img").get_attribute("src").strip()
     except:
         label_img = ""
 
-    # 🧠 Infer Attributes
-    dieta_attr = extract_dieta_attribute(long_desc)
-    kalorii_attr = extract_kalorii_attribute(nutrition_flat)
+    # — Derived Attributes —
+    dieta_val = extract_dieta_attribute(short_desc + " " + long_desc)
+    kalorii_val = extract_kalorii_attribute(nutrition_flat)
+    marki_val = brand
 
-    return {
+    # — GTIN Extraction from JSON-LD —
+    gtin = ""
+    try:
+        scripts = driver.find_elements(By.XPATH, "//script[@type='application/ld+json']")
+        for script in scripts:
+            content = script.get_attribute("innerText")
+            if '"@type": "Product"' in content and '"gtin13"' in content:
+                try:
+                    json_data = json.loads(content)
+                    if isinstance(json_data, dict) and "gtin13" in json_data:
+                        gtin = json_data["gtin13"]
+                        break
+                except json.JSONDecodeError:
+                    continue
+    except:
+        pass
+
+    # — Build base dict —
+    data = {
+        "GTIN": gtin,
         "Title": title,
         "Price": price,
         "Brand": brand,
@@ -142,65 +195,96 @@ def fetch_product_data(driver):
         "Nutrition Facts": nutrition_flat,
         "Nutrition Label URL": label_img,
         "images": ",".join(image_urls),
-        "Dieta": dieta_attr,
-        "Kalorii": kalorii_attr,
-        "Marki": brand  # reusing brand for Woo attribute
     }
 
-# 🚀 STARTING SCRIPT
+    # — Append Woo Attributes in correct format —
+    data.update({
+        "Attribute 1 name": "Dieta",
+        "Attribute 1 value(s)": dieta_val,
+        "Attribute 1 visible": 1,
+        "Attribute 1 global": 1,
+
+        "Attribute 2 name": "Kalorii",
+        "Attribute 2 value(s)": kalorii_val,
+        "Attribute 2 visible": 1,
+        "Attribute 2 global": 1,
+
+        "Attribute 3 name": "Marki",
+        "Attribute 3 value(s)": marki_val,
+        "Attribute 3 visible": 1,
+        "Attribute 3 global": 1,
+    })
+
+    return data
+
+# === MAIN SCRIPT ===
+
 options = webdriver.ChromeOptions()
+options.add_argument("--headless")  # Enable headless mode
+options.add_argument("--disable-gpu")  # Optional: improves compatibility
+options.add_argument("--window-size=1920,1080")  # Ensures full layout rendering
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-driver.get("https://guiltfree.pl/gb/354-high-protein-products")
-time.sleep(2)
-
-try:
-    cookie_btn = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, ".x13eucookies__btn--accept-all"))
-    )
-    cookie_btn.click()
-    print("✅ Accepted cookies.")
-except:
-    print("⚠️ Cookie banner not found or already dismissed.")
-
-WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body")))
-
-print("🔄 Scrolling to load products...")
-MAX_SCROLLS = 10
-for _ in range(MAX_SCROLLS):
-    driver.execute_script("window.scrollBy(0, 500);")
-    time.sleep(1.5)
-
-# ✅ Collect product URLs
-product_urls = []
-cards = driver.find_elements(By.CSS_SELECTOR, "section#products article.product-miniature")
-for card in cards[:5]:  # limit for testing
-    try:
-        if card.is_displayed():
-            link = card.find_element(By.CSS_SELECTOR, "a.thumbnail").get_attribute("href")
-            product_urls.append(link)
-            print(f"✅ Collected link: {link}")
-    except:
-        continue
-
-# ✅ Scrape data
 results = []
-for url in product_urls:
-    print(f"Scraping: {url}")
-    driver.get(url)
-    random_sleep()
-    data = fetch_product_data(driver)
-    if any(data.values()):
-        results.append(data)
+
+for category_url in CATEGORY_URLS:
+    category_name = CATEGORY_NAMES.get(category_url, "")
+    print(f"\n🔍 Scraping category: {category_name} ({category_url})")
+
+    driver.get(category_url)
+    time.sleep(2)
+
+    # — Accept cookies if shown —
+    try:
+        btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".x13eucookies__btn--accept-all"))
+        )
+        btn.click()
+    except:
+        pass
+
+    WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+    # — Scroll to load all products —
+    for _ in range(10):
+        driver.execute_script("window.scrollBy(0,500)")
+        time.sleep(1)
+
+    # — Collect product links —
+    product_urls = []
+    cards = driver.find_elements(By.CSS_SELECTOR, "section#products article.product-miniature")
+    for card in cards[:2]:  # Limit per category; adjust as needed
+        try:
+            if card.is_displayed():
+                link = card.find_element(By.CSS_SELECTOR, "a.thumbnail").get_attribute("href")
+                product_urls.append(link)
+        except:
+            continue
+
+    product_counter = 0
+
+    # — Visit each product and extract data —
+    for url in product_urls:
+        driver.get(url)
+        random_sleep(3, 6)  # Increased sleep range
+        data = fetch_product_data(driver)
+        product_counter += 1
+        if data:
+            data["Categories"] = category_name
+            results.append(data)
+        if product_counter % 20 == 0:
+            print("⏳ Cooldown... sleeping for 15 seconds to prevent server overload.")
+            time.sleep(15)
 
 driver.quit()
 
-# ✅ Save to CSV
+# — Save CSV with BOM so Polish chars import cleanly —
+
 if results:
     with open("products.csv", "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
         writer.writeheader()
         writer.writerows(results)
-    print("✅ Scraping complete! Check products.csv")
+    print("✅ Scraping complete — products.csv ready for WooCommerce import")
 else:
-    print("⚠️ No product data was extracted.")
+    print("⚠️ No data scraped")

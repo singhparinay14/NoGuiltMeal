@@ -38,7 +38,9 @@ def enhance_with_gpt(system_prompt: str, user_prompt: str) -> str:
         return ""
 
 # ✅ Load product data
-df = pd.read_csv(INPUT_CSV)
+df = pd.read_csv(INPUT_CSV, encoding="utf-8-sig")
+
+# ✅ Add empty columns for enhanced descriptions
 df["Enhanced Short Description"] = ""
 df["Enhanced Long Description"] = ""
 
@@ -47,10 +49,11 @@ SYSTEM_PROMPT = "You are a helpful assistant for rewriting e-commerce product de
 
 # ✅ Iterate over each row
 for idx, row in tqdm(df.iterrows(), total=len(df)):
-    name = row.get("Title", "").strip()
-    nutrition_facts = row.get("Nutrition Facts", "").strip()
-    short_desc = row.get("Short Description", "").strip()
-    long_desc = row.get("Long Description", "").strip()
+    name = str(row["Title"]).strip() if pd.notna(row["Title"]) else ""
+    nutrition_facts = str(row["Nutrition Facts"]).replace('"', '').strip() if pd.notna(row["Nutrition Facts"]) else ""
+    short_desc = str(row["Short Description"]).strip() if pd.notna(row["Short Description"]) else ""
+    long_desc = str(row["Long Description"]).strip() if pd.notna(row["Long Description"]) else ""
+
 
     # ✅ Enhance Short Description
     if short_desc:
@@ -85,6 +88,7 @@ for idx, row in tqdm(df.iterrows(), total=len(df)):
         )
         df.at[idx, "Enhanced Long Description"] = enhance_with_gpt(SYSTEM_PROMPT, user_prompt)
 
-# ✅ Save enhanced CSV with UTF-8 BOM for WooCommerce compatibility
-df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
+# ✅ Preserve column order and export with BOM for WooCommerce compatibility
+columns = list(df.columns)
+df.to_csv(OUTPUT_CSV, index=False, columns=columns, encoding="utf-8-sig")
 print(f"✅ Enhanced descriptions written to {OUTPUT_CSV}")
