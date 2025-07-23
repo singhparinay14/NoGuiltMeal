@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NoGuiltMeal - Zdrowe Plany Żywieniowe</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <!-- Nagłówek / Nawigacja -->
+  <header>
+    <div class="container nav">
+      <div class="nav__logo">NoGuiltMeal</div>
+      <nav>
+        <ul class="nav__links" id="navLinks">
+          <li><a href="#plans">Plany Żywieniowe</a></li>
+          <li><a href="#testimonials">Opinie Klientów</a></li>
+          <li><a href="#footer">Kontakt</a></li>
+        </ul>
+        <div class="nav__toggle" id="navToggle">☰</div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Sekcja Hero -->
+  <section class="container hero">
+    <div class="hero__text">
+      <h1>Zdrowe Odżywianie Bez Wyrzutów Sumienia</h1>
+      <p>Odkryj spersonalizowane plany żywieniowe przygotowane przez dietetyków. Oszczędzaj czas, jedz zdrowo i czuj się
+        świetnie każdego dnia.</p>
+      <a href="#plans" class="btn">Zacznij Teraz</a>
+    </div>
+    <div class="hero__image">
+      <img src="https://via.placeholder.com/500x400" alt="Zdrowe posiłki" loading="lazy" />
+    </div>
+  </section>
+
+  <!-- Sekcja Planów Żywieniowych -->
+  <section class="plans" id="plans">
+    <div class="container">
+      <h2>Nasze Plany Żywieniowe</h2>
+      <div class="plans__grid">
+        <!-- Plan Podstawowy -->
+        <div class="plan">
+          <img src="https://via.placeholder.com/300x180" alt="Plan Podstawowy" />
+          <div class="plan__body">
+            <h3>Plan Podstawowy</h3>
+            <p>Doskonały dla osób rozpoczynających przygodę ze zdrowym odżywianiem.</p>
+            <a href="#" class="btn">Wybierz Plan</a>
+          </div>
+        </div>
+        <!-- Plan Aktywny -->
+        <div class="plan">
+          <img src="https://via.placeholder.com/300x180" alt="Plan Aktywny" />
+          <div class="plan__body">
+            <h3>Plan Aktywny</h3>
+            <p>Zaawansowane opcje dla osób aktywnych fizycznie i sportowców.</p>
+            <a href="#" class="btn">Wybierz Plan</a>
+          </div>
+        </div>
+        <!-- Plan Rodzinny -->
+        <div class="plan">
+          <img src="https://via.placeholder.com/300x180" alt="Plan Rodzinny" />
+          <div class="plan__body">
+            <h3>Plan Rodzinny</h3>
+            <p>Zbilansowane posiłki idealne dla całej rodziny.</p>
+            <a href="#" class="btn">Wybierz Plan</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sekcja Opinii -->
+  <section class="container testimonials" id="testimonials">
+    <h2>Co Mówią Nasi Klienci</h2>
+    <div class="testimonials__list">
+      <div class="testimonial">
+        <p>"NoGuiltMeal zmienił moje podejście do jedzenia. Każdy posiłek jest smaczny i zdrowy!"</p>
+        <div class="testimonial__author">- Aleksandra</div>
+      </div>
+      <div class="testimonial">
+        <p>"Uwielbiam prostotę przepisów i fakt, że mogę trzymać się planu bez stresu."</p>
+        <div class="testimonial__author">- Marcin</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stopka -->
+  <footer id="footer">
+    <div class="container footer__grid">
+      <div>
+        <div class="footer__logo">NoGuiltMeal</div>
+        <p>Twój partner w zdrowym stylu życia i planowaniu posiłków.</p>
+      </div>
+      <div>
+        <h4>Szybkie Linki</h4>
+        <ul class="footer__links">
+          <li><a href="#plans">Plany Żywieniowe</a></li>
+          <li><a href="#testimonials">Opinie Klientów</a></li>
+          <li><a href="#footer">Kontakt</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Obserwuj Nas</h4>
+        <div class="footer__socials">
+          <a href="#" aria-label="Facebook">📘</a>
+          <a href="#" aria-label="Instagram">📸</a>
+          <a href="#" aria-label="Twitter">🐦</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Skrypt do rozwijanego menu -->
+  <script src="script.js"></script>
+</body>
+
+</html>

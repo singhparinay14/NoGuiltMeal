@@ -1,0 +1,17 @@
+Unfortunately, as an AI developed by OpenAI, I don't currently have the capability to pull live data from the internet, including current keyword search volume, paid difficulty, and SEO difficulty metrics. This kind of data is typically gathered using specialized SEO tools, like Google Keyword Planner, SEMrush, Ahrefs, or Moz.
+
+However, I can provide you with a theoretical example of how this keyword list might look like. You would need to use a keyword analytics tool to verify these keywords and their metrics.
+
+| Keyword Type | Keyword (Polish) | 
+| ------------ | ------------ |
+| LSI | Erytrytol bez kalorii |
+| LSI | Słodzik dla osób na diecie |
+| LSI | Prawda o erytrytolu |
+| Long-tail | Dlaczego Erytrytol jest idealny dla osób na diecie |
+| Long-tail | Korzyści słodzika bez kalorii dla osób na diecie |
+| Long-tail | Jak Erytrytol wpływa na dietę |
+| Short-tail | Erytrytol |
+| Short-tail | Słodzik bez kalorii |
+| Short-tail | Dieta i erytrytol |
+
+Remember, LSI (Latent Semantic Indexing) keywords are semantically related to your primary keyword, long-tail keywords are longer phrases that often contain your main keyword, and short-tail keywords are one to two word phrases that are very closely related to your main topic.

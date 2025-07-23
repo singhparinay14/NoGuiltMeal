@@ -1,0 +1,16 @@
+fix the existing products and improve their rankmath scores above 60.
+
+ping koka to add new article titles for the blogs.
+
+Keep working on front page html.
+
+implement the EAN number for products.
+
+Koka - product procurement planning (Sunday this week)  subtask - product order history analysis.
+
+create all these tasks in click.com
+
+
+
+
+

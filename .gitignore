@@ -1,0 +1,30 @@
+# Secrets
+*.env
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Data
+*.csv
+*.tsv
+*.xlsx
+*.zip
+
+# Allow specific CSVs back in
+!shop_crawler/Existing_Products/products_missing_nutrition.csv
