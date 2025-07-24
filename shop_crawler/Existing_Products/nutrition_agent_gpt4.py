@@ -1,132 +1,98 @@
-# nutrition_agent_gpt4.py (Batch Processing: GPT-4o + Web Search Tool)
-
 import os
-import openai
-import pandas as pd
 import json
+import pandas as pd
+import asyncio
 from dotenv import load_dotenv
+from agents import Agent, Runner, WebSearchTool
 
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# ─── Configuration ───────────────────────────────────────────────────────────────
+
+load_dotenv()  # expects OPENAI_API_KEY in your environment
 
 HTML_TEMPLATE = """
 <div style='overflow-x:auto;'>
-<h2>Tabela wartości odżywczych</h2>
-<div style="overflow-x:auto;"><table style='width: 100%; border-collapse: collapse; margin: 20px 0; font-family: Arial, sans-serif;'>
-<thead>
-<tr style='background-color: #f2f2f2; text-align: left;'>
-<th style='padding: 12px; border: 1px solid #ddd;'>Składnik</th>
-<th style='padding: 12px; border: 1px solid #ddd;'>Wartość</th>
-</tr>
-</thead>
-<tbody>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Wartość odżywcza</td><td style='padding: 12px; border: 1px solid #ddd;'>100 g</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Wartość energetyczna</td><td style='padding: 12px; border: 1px solid #ddd;'>{energy}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Tłuszcz</td><td style='padding: 12px; border: 1px solid #ddd;'>{fat}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>w tym kwasy tłuszczowe nasycone</td><td style='padding: 12px; border: 1px solid #ddd;'>{saturated_fat}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Węglowodany</td><td style='padding: 12px; border: 1px solid #ddd;'>{carbs}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>w tym cukry</td><td style='padding: 12px; border: 1px solid #ddd;'>{sugars}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Białko</td><td style='padding: 12px; border: 1px solid #ddd;'>{protein}</td></tr>
-<tr><td style='padding: 12px; border: 1px solid #ddd;'>Sól</td><td style='padding: 12px; border: 1px solid #ddd;'>{salt}</td></tr>
-</tbody>
-</table></div>
+  <h2>Tabela wartości odżywczych</h2>
+  <div style="overflow-x:auto;">
+    <table style='width: 100%; border-collapse: collapse; margin: 20px 0; font-family: Arial, sans-serif;'>
+      <thead>
+        <tr style='background-color: #f2f2f2; text-align: left;'>
+          <th style='padding: 12px; border: 1px solid #ddd;'>Składnik</th>
+          <th style='padding: 12px; border: 1px solid #ddd;'>Wartość</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Wartość odżywcza</td><td style='padding: 12px; border: 1px solid #ddd;'>100 g</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Wartość energetyczna</td><td style='padding: 12px; border: 1px solid #ddd;'>{energy}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Tłuszcz</td><td style='padding: 12px; border: 1px solid #ddd;'>{fat}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>w tym kwasy tłuszczowe nasycone</td><td style='padding: 12px; border: 1px solid #ddd;'>{saturated_fat}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Węglowodany</td><td style='padding: 12px; border: 1px solid #ddd;'>{carbs}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>w tym cukry</td><td style='padding: 12px; border: 1px solid #ddd;'>{sugars}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Białko</td><td style='padding: 12px; border: 1px solid #ddd;'>{protein}</td></tr>
+        <tr><td style='padding: 12px; border: 1px solid #ddd;'>Sól</td><td style='padding: 12px; border: 1px solid #ddd;'>{salt}</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 """
 
-SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the web for real-time information",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query to look up"
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}
+# ─── Build the Agent ─────────────────────────────────────────────────────────────
 
-def get_nutrition_html(product_name):
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You're a nutrition assistant. Search the web for nutritional values per 100g or 100ml. "
-                "Return ONLY JSON with fields: energy, fat, saturated_fat, carbs, sugars, protein, salt. "
-                "Also provide a source URL in a separate line like: \nSOURCE: https://example.com"
-            )
-        },
-        {
-            "role": "user",
-            "content": f"Wyszukaj wartości odżywcze dla produktu: {product_name}"
-        }
-    ]
+agent = Agent(
+    name="NutritionAgent",
+    instructions="""
+You are a nutrition expert. For a given product name:
+1. Use the WebSearchTool to search "<product> wartości odżywcze".
+2. Extract per-100g nutrition values (convert if only per-serving found).
+3. Return ONLY a JSON object with keys: energy, fat, saturated_fat, carbs, sugars, protein, salt.
+4. On a new line, add: SOURCE: <URL you used>
+5. If no data is found, return exactly: No data found
+""",
+    tools=[WebSearchTool()],
+)
 
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        tools=[SEARCH_TOOL],
-        tool_choice="auto",
-        stream=False
+# ─── Main Loop ──────────────────────────────────────────────────────────────────
+
+async def main():
+    df = pd.read_csv("products_missing_nutrition.csv", encoding="utf-8")
+    output = []
+
+    for _, row in df.iterrows():
+        pid, name = row["ID"], row["Name"]
+        print(f"Processing: {name}")
+        run_result = await Runner.run(agent, f"Podaj wartości odżywcze na 100g dla produktu: {name}")
+        reply = run_result.final_output.strip()
+
+        if reply == "No data found":
+            html, source, flag = "", "", 0
+        else:
+            # Split off SOURCE line
+            if "SOURCE:" in reply:
+                json_part, source_part = reply.split("SOURCE:", 1)
+                source = source_part.strip()
+            else:
+                json_part, source = reply, ""
+            # Try parsing JSON
+            try:
+                nutrition = json.loads(json_part)
+                html = HTML_TEMPLATE.format(**nutrition)
+                flag = 1
+            except json.JSONDecodeError:
+                html, source, flag = "", "", 0
+
+        output.append({
+            "ID":             pid,
+            "Name":           name,
+            "NutritionHTML":  html,
+            "Source":         source,
+            "NutritionFound": flag
+        })
+
+    pd.DataFrame(output).to_csv(
+        "products_with_nutrition_filled.csv",
+        index=False,
+        encoding="utf-8"
     )
-
-    if hasattr(response.choices[0].message, "tool_calls"):
-        tool_call = response.choices[0].message.tool_calls[0]
-        tool_messages = messages + [
-            {"role": "assistant", "tool_calls": [tool_call]},
-            {"role": "tool", "tool_call_id": tool_call.id, "name": tool_call.function.name,
-             "content": f"query={product_name} wartości odżywcze"}
-        ]
-
-        final_response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=tool_messages,
-            stream=False
-        )
-        reply = final_response.choices[0].message.content
-    else:
-        reply = response.choices[0].message.content
-
-    print("🧪 GPT reply:", reply)
-
-    try:
-        # Extract source line if present
-        source_line = ""
-        if "SOURCE:" in reply:
-            source_line = reply.split("SOURCE:")[-1].strip()
-            reply = reply.split("SOURCE:")[0].strip()
-
-        clean_reply = reply.strip("`").replace("json", "").strip()
-        json_data = json.loads(clean_reply)
-        return HTML_TEMPLATE.format(**json_data), source_line
-    except Exception as e:
-        print("❌ Parse error:", e)
-        return None, None
+    print("✅ Done.")
 
 if __name__ == "__main__":
-    input_csv = "products_missing_nutrition.csv"
-    df = pd.read_csv(input_csv)
-    output_rows = []
-
-    for i, row in df.iterrows():
-        name = row.get("Name")
-        pid = row.get("ID")
-
-        print(f"\n[{i+1}/{len(df)}] Processing: {name}")
-        html, source = get_nutrition_html(name)
-
-        if html:
-            output_rows.append({
-                "ID": pid,
-                "Name": name,
-                "NutritionHTML": html,
-                "Source": source or "N/A"
-            })
-
-    pd.DataFrame(output_rows).to_csv("products_with_nutrition_filled.csv", index=False)
-    print("\n✅ Finished processing all products.")
+    asyncio.run(main())
